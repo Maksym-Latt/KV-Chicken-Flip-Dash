@@ -233,6 +233,18 @@ class GameEngine {
                         }
                 }
 
+                val farthestPlatform = mutPlat.maxByOrNull { it.position.x + it.size.width }
+                if (farthestPlatform != null && Random.nextFloat() < 0.6f) {
+                        val eggX = farthestPlatform.position.x + farthestPlatform.size.width * 0.6f
+                        val eggY =
+                                if (farthestPlatform.isCeiling) {
+                                        farthestPlatform.position.y + farthestPlatform.size.height + 30f
+                                } else {
+                                        farthestPlatform.position.y - 70f
+                                }
+                        mutEggs.add(Egg(Offset(eggX, eggY)))
+                }
+
                 return mutPlat to mutEggs
         }
 

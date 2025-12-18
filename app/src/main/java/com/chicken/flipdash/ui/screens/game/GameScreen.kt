@@ -4,11 +4,11 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -19,13 +19,26 @@ import com.chicken.flipdash.ui.GameAction
 import com.chicken.flipdash.ui.GameViewModel
 import com.chicken.flipdash.ui.components.GameCanvas
 import com.chicken.flipdash.ui.components.GameText
+import com.chicken.flipdash.ui.components.GameOverOverlay
+import com.chicken.flipdash.ui.components.IntroOverlay
+import com.chicken.flipdash.ui.components.PauseOverlay
+import com.chicken.flipdash.ui.components.SettingsOverlay
 
 @Composable
 fun GameScreen(onNavigateBack: () -> Unit, viewModel: GameViewModel = hiltViewModel()) {
-    val state by viewModel.gameState.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
-    Box(modifier = Modifier.fillMaxSize().clickable { viewModel.onAction(GameAction.Tap) }) {
-        // Game Background Image
+    LaunchedEffect(Unit) { viewModel.onScreenVisible() }
+
+    val goToMenu = {
+        viewModel.returnToMenu()
+        onNavigateBack()
+    }
+
+    val isTapEnabled =
+            !uiState.gameState.isPaused && !uiState.gameState.isGameOver && !uiState.showIntro
+
+    Box(modifier = Modifier.fillMaxSize().let { if (isTapEnabled) it.clickable { viewModel.onAction(GameAction.Tap) } else it }) {
         Image(
                 painter = painterResource(id = R.drawable.bg),
                 contentDescription = null,
@@ -33,15 +46,13 @@ fun GameScreen(onNavigateBack: () -> Unit, viewModel: GameViewModel = hiltViewMo
                 contentScale = ContentScale.Crop
         )
 
-        GameCanvas(state = state)
+        GameCanvas(state = uiState.gameState)
 
-        // HUD - Score (Top Center)
         Column(
                 modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
-        ) { GameText(text = state.score.toString(), fontSize = 56.sp, outlineWidth = 3) }
+        ) { GameText(text = uiState.gameState.score.toString(), fontSize = 56.sp, outlineWidth = 3) }
 
-        // HUD - Pause Button (Top Right)
         Box(
                 modifier = Modifier.fillMaxWidth().padding(20.dp),
                 contentAlignment = Alignment.TopEnd
@@ -63,85 +74,32 @@ fun GameScreen(onNavigateBack: () -> Unit, viewModel: GameViewModel = hiltViewMo
             }
         }
 
-        // Overlays
-        if (state.isGameOver) {
-            GameOverOverlay(
-                    score = state.score,
-                    onRestart = { viewModel.onAction(GameAction.Restart) },
-                    onMenu = onNavigateBack
-            )
-        } else if (state.isPaused) {
-            PauseOverlay(
-                    onResumed = { viewModel.onAction(GameAction.Resume) },
-                    onMenu = onNavigateBack
-            )
-        }
-    }
-}
-
-@Composable
-fun GameOverOverlay(score: Int, onRestart: () -> Unit, onMenu: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            GameText(text = "GAME OVER", fontSize = 50.sp, color = Color.White)
-            Spacer(modifier = Modifier.height(20.dp))
-            GameText(text = "SCORE: $score", fontSize = 32.sp)
-            Spacer(modifier = Modifier.height(40.dp))
-
-            Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.clickable { onRestart() }
-            ) {
-                Image(
-                        painter = painterResource(R.drawable.btn_bg_primary_orange),
-                        contentDescription = null,
-                        modifier = Modifier.width(220.dp).height(70.dp)
-                )
-                GameText(text = "RETRY", fontSize = 28.sp)
+        when {
+            uiState.showIntro -> {
+                IntroOverlay(onStart = { viewModel.onAction(GameAction.StartIntro) })
             }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.clickable { onMenu() }) {
-                Image(
-                        painter = painterResource(R.drawable.btn_bg_primary_red),
-                        contentDescription = null,
-                        modifier = Modifier.width(220.dp).height(70.dp)
+            uiState.gameState.isGameOver -> {
+                GameOverOverlay(
+                        score = uiState.gameState.score,
+                        bestScore = uiState.bestScore,
+                        onRestart = { viewModel.onAction(GameAction.Restart) },
+                        onMenu = goToMenu
                 )
-                GameText(text = "MENU", fontSize = 28.sp)
             }
-        }
-    }
-}
-
-@Composable
-fun PauseOverlay(onResumed: () -> Unit, onMenu: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            GameText(text = "PAUSED", fontSize = 50.sp)
-            Spacer(modifier = Modifier.height(40.dp))
-
-            Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.clickable { onResumed() }
-            ) {
-                Image(
-                        painter = painterResource(R.drawable.btn_bg_primary_orange),
-                        contentDescription = null,
-                        modifier = Modifier.width(220.dp).height(70.dp)
+            uiState.gameState.isPaused -> {
+                PauseOverlay(
+                        onResumed = { viewModel.onAction(GameAction.Resume) },
+                        onMenu = goToMenu,
+                        settingsContent = {
+                            SettingsOverlay(
+                                    soundSettings = uiState.soundSettings,
+                                    onMusicVolumeChanged = viewModel::updateMusicVolume,
+                                    onSfxVolumeChanged = viewModel::updateSfxVolume,
+                                    onHome = goToMenu,
+                                    isCard = true
+                            )
+                        }
                 )
-                GameText(text = "RESUME", fontSize = 28.sp)
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.clickable { onMenu() }) {
-                Image(
-                        painter = painterResource(R.drawable.btn_bg_primary_red),
-                        contentDescription = null,
-                        modifier = Modifier.width(220.dp).height(70.dp)
-                )
-                GameText(text = "MENU", fontSize = 28.sp)
             }
         }
     }
