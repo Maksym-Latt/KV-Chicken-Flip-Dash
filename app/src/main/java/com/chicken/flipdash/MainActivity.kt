@@ -3,32 +3,26 @@ package com.chicken.flipdash
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.activity.viewModels
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.chicken.flipdash.ui.GameAction
+import com.chicken.flipdash.ui.GameViewModel
 import com.chicken.flipdash.ui.theme.ChickenFlipDashTheme
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    @Inject
-    lateinit var audioController: AudioController
+    @Inject lateinit var audioController: AudioController
+
+    private val gameViewModel: GameViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        setContent {
-            ChickenFlipDashTheme() {
-                AppNavHost()
-            }
-        }
+        setContent { ChickenFlipDashTheme { AppNavHost() } }
 
         hideSystemUI()
     }
@@ -36,24 +30,28 @@ class MainActivity : ComponentActivity() {
     private fun hideSystemUI() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = WindowInsetsControllerCompat(window, window.decorView)
-        controller.hide(WindowInsetsCompat.Type.navigationBars())
+        controller.hide(
+                WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.statusBars()
+        )
         controller.systemBarsBehavior =
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 
     override fun onResume() {
         super.onResume()
         hideSystemUI()
         audioController.onAppForeground()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        audioController.onAppBackground()
+        gameViewModel.onAction(GameAction.Resume)
     }
 
     override fun onPause() {
         super.onPause()
+        audioController.onAppBackground()
+        gameViewModel.onAction(GameAction.Pause)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
         audioController.onAppBackground()
     }
 }
